@@ -1,5 +1,12 @@
 # Computação Gráfica - Desenvolvimento M1 - 3D e Arquivos .obj
+  - Carregamento de arquivos .obj
+  - Leitura de vertices, texturas e normais
+  - Renderização com vertices e normais
+  - Atalhos de teclado e mouse para rotação, translação e escala 
 
+---
+![GIF da execução](./demo.gif)
+---
 
 ## Rotação (Eixos X, Y, Z)
 - **u** → Rotaciona para cima (eixo X - negativo)  
