@@ -46,9 +46,9 @@ void buildObj() {
         glBegin(GL_TRIANGLES);
 
         for (const auto& face : faces) {
-            int nVerts = face.size() / 3;  // número de vértices da face
+            int nVerts = face.size() / 3;
 
-            // triangulação em fan: (0, i, i+1)
+            // fan triangulation
             for (int i = 1; i < nVerts - 1; i++) {
                 int idxs[3][3] = {
                     {face[0],        face[1],        face[2]},        // v0
@@ -363,7 +363,7 @@ int main(int argc, char** argv)
     
     glutMouseFunc(handleMouse);
     glutMotionFunc(handleMouseMovement);
-    glutMouseWheelFunc(handleMouseWheel);
+    //glutMouseWheelFunc(handleMouseWheel);
 
     glutTimerFunc(10, timer, 0);
     
