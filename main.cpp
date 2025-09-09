@@ -363,7 +363,7 @@ int main(int argc, char** argv)
     
     glutMouseFunc(handleMouse);
     glutMotionFunc(handleMouseMovement);
-    //glutMouseWheelFunc(handleMouseWheel);
+    glutMouseWheelFunc(handleMouseWheel);
 
     glutTimerFunc(10, timer, 0);
     
@@ -373,6 +373,7 @@ int main(int argc, char** argv)
     glutMainLoop();
     return 0;
 }
+
 
 
 
