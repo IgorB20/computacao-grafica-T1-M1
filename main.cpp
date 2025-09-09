@@ -4,6 +4,7 @@
 #include <vector>
 #include <GL/freeglut.h>
 #include <string>
+#include <sstream>
 
 using namespace std;
 
@@ -22,7 +23,7 @@ float zTranslation = -25;
 float translationUnit = 4;
 
 float scale = 0.05f;
-float scaleUnit = 0.05f;
+float scaleUnit = 0.01f;
 
 bool isMouseRotationActive = false;
 bool isMouseTranslationActive = false;
@@ -37,25 +38,37 @@ vector<vector<float>> normals;
 
 void keyboard(unsigned char key, int x, int y);
 
-void buildObj(){
+void buildObj() {
     exibitionList = glGenLists(1);
     glNewList(exibitionList, GL_COMPILE);
     {
         glPushMatrix();
         glBegin(GL_TRIANGLES);
 
-        for (size_t i = 0; i < faces.size(); ++i) {
-            const auto& face = faces[i];
-            
-            if (face[2] != -1 && face[2] < (int)normals.size()) glNormal3fv(normals[face[2]].data());
-            glVertex3fv(vertices[face[0]].data());
-            
-            if (face[5] != -1 && face[5] < (int)normals.size()) glNormal3fv(normals[face[5]].data());
-            glVertex3fv(vertices[face[3]].data());
-            
-            if (face[8] != -1 && face[8] < (int)normals.size()) glNormal3fv(normals[face[8]].data());
-            glVertex3fv(vertices[face[6]].data());
-    
+        for (const auto& face : faces) {
+            int nVerts = face.size() / 3;  // número de vértices da face
+
+            // triangulação em fan: (0, i, i+1)
+            for (int i = 1; i < nVerts - 1; i++) {
+                int idxs[3][3] = {
+                    {face[0],        face[1],        face[2]},        // v0
+                    {face[i*3],      face[i*3+1],    face[i*3+2]},    // vi
+                    {face[(i+1)*3],  face[(i+1)*3+1],face[(i+1)*3+2]} // vi+1
+                };
+
+                for (int k = 0; k < 3; k++) {
+                    int v  = idxs[k][0];
+                    int vt = idxs[k][1];
+                    int vn = idxs[k][2];
+
+                    if (vn >= 0 && vn < (int)normals.size())
+                        glNormal3fv(normals[vn].data());
+                    if (vt >= 0 && vt < (int)textures.size())
+                        glTexCoord2fv(textures[vt].data());
+                    if (v >= 0 && v < (int)vertices.size())
+                        glVertex3fv(vertices[v].data());
+                }
+            }
         }
 
         glEnd();
@@ -64,105 +77,72 @@ void buildObj(){
     glEndList();
 }
 
-void loadObj(string fname)
-{
-    ifstream arquivo(fname);
-    if (!arquivo.is_open()) {
-        cout << "arquivo nao encontrado";
+void loadObj(string filename) {
+    ifstream file(filename);
+    if (!file.is_open()) {
+        cout << "Erro: Arquivo '" << filename << "' não encontrado!" << endl;
         exit(1);
     }
-    else {
-        string tipo;
-        while (arquivo >> tipo)
-        {
 
-            if (tipo == "v")
-            {
-                vector<float> vertice;
-                float x, y, z;
-                arquivo >> x >> y >> z;
-                vertice.push_back(x);
-                vertice.push_back(y);
-                vertice.push_back(z);
-                vertices.push_back(vertice);
-            }
-            
-            if(tipo == "vt")
-            {
-                vector<float> texture;
-                float u, v;
-                arquivo >> u >> v;
-                texture.push_back(u);
-                texture.push_back(v);
-                textures.push_back(texture);
-            }
-            
-            if(tipo == "vn")
-            {
-                vector<float> normal;
-                float x, y, z;
-                arquivo >> x >> y >> z;
-                normal.push_back(x);
-                normal.push_back(y);
-                normal.push_back(z);
-                normals.push_back(normal);
-            }
+    string line;
+    while (getline(file, line)) {
+        if (line.empty() || line[0] == '#') continue;
 
-            if (tipo == "f")
-            {
-                vector<string> facesString;
-                string f1, f2, f3;
-                arquivo >> f1 >> f2 >> f3;;
+        stringstream ss(line);
+        string type;
+        ss >> type;
 
-                facesString.push_back(f1);
-                facesString.push_back(f2);
-                facesString.push_back(f3);
-                
-                vector<int> indicesFace;
-                
-                for(int i = 0; i< facesString.size(); i++){
-                    string segmento = facesString[i];
-                    size_t barra1 = segmento.find('/');
-                    size_t barra2 = string::npos;
-                    if (barra1 != string::npos) {
-                        barra2 = segmento.find('/', barra1 + 1);
+        if (type == "v") {
+            vector<float> v(3);
+            ss >> v[0] >> v[1] >> v[2];
+            vertices.push_back(v);
+        } else if (type == "vn") {
+            vector<float> vn(3);
+            ss >> vn[0] >> vn[1] >> vn[2];
+            normals.push_back(vn);
+        } else if (type == "vt") {
+            vector<float> vt(2);
+            ss >> vt[0] >> vt[1];
+            textures.push_back(vt);
+        } else if (type == "f") {
+            vector<int> indices;
+            string part;
+            while (ss >> part) {
+                size_t slash1 = part.find('/');
+                size_t slash2 = string::npos;
+                if (slash1 != string::npos) slash2 = part.find('/', slash1 + 1);
+
+                int v_idx  = stoi(part.substr(0, slash1)) - 1;
+                int vt_idx = -1;
+                int vn_idx = -1;
+
+                if (slash1 != string::npos) {
+                    if (slash2 != string::npos) {
+                        if (slash1 + 1 < slash2)
+                            vt_idx = stoi(part.substr(slash1 + 1, slash2 - (slash1 + 1))) - 1;
+                        vn_idx = stoi(part.substr(slash2 + 1)) - 1;
+                    } else {
+                        if (part.at(slash1 + 1) == '/')
+                            vn_idx = stoi(part.substr(slash1 + 2)) - 1;
+                        else
+                            vt_idx = stoi(part.substr(slash1 + 1)) - 1;
                     }
-                    
-                    int v_idx = stoi(segmento.substr(0, barra1)) - 1;
-                    int vt_idx = -1;
-                    int vn_idx = -1;
-                    
-                    if (barra1 != string::npos) {
-                        if (barra2 != string::npos) {
-                            if (barra1 + 1 < barra2) {
-                                vt_idx = stoi(segmento.substr(barra1 + 1, barra2 - (barra1 + 1))) - 1;
-                            }
-                            vn_idx = stoi(segmento.substr(barra2 + 1)) - 1;
-                        } else {
-                            if (segmento.at(barra1 + 1) == '/') {
-                                vn_idx = stoi(segmento.substr(barra1 + 2)) - 1;
-                            } else {
-                                vt_idx = stoi(segmento.substr(barra1 + 1)) - 1;
-                            }
-                        }
-                    }
-                    
-                    indicesFace.push_back(v_idx);
-                    indicesFace.push_back(vt_idx);
-                    indicesFace.push_back(vn_idx);
-
                 }
-                faces.push_back(indicesFace);
+
+                indices.push_back(v_idx);
+                indices.push_back(vt_idx);
+                indices.push_back(vn_idx);
             }
+            faces.push_back(indices);
         }
     }
+    file.close();
 }
 
 
 void render()
 {
     glPushMatrix();
-    //glTranslatef(0, 0, -105);
     glColor3f(1.0, 0.23, 0.27);
     
     glTranslatef(xTranslation, yTranslation, zTranslation);
@@ -368,7 +348,7 @@ int main(int argc, char** argv)
     glutInitWindowSize(1080, 720);
     glutInitWindowPosition(20, 20);
     
-    glutCreateWindow("Carregar OBJ");
+    glutCreateWindow("Desenvolvimento M1 - 3D e Arquivos .obj");
     
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_LIGHTING);
@@ -383,17 +363,16 @@ int main(int argc, char** argv)
     
     glutMouseFunc(handleMouse);
     glutMotionFunc(handleMouseMovement);
-    //glutMouseWheelFunc(handleMouseWheel);
+    glutMouseWheelFunc(handleMouseWheel);
 
     glutTimerFunc(10, timer, 0);
     
-    loadObj("objetos/mba1.obj");
+    loadObj("objetos/porsche.obj");
     buildObj();
     
     glutMainLoop();
     return 0;
 }
-
 
 
 
